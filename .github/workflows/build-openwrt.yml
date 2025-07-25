@@ -22,8 +22,8 @@ on:
 
 jobs:
   build:
-    name: Build OpenWrt ${{ github.event.inputs.version }}
     runs-on: ubuntu-22.04
+    name: Build OpenWrt ${{ github.event.inputs.version }}
 
     steps:
       - uses: actions/checkout@v4
@@ -43,8 +43,11 @@ jobs:
           elif [[ "$VERSION" == 23.05.* ]]; then BRANCH="openwrt-23.05"
           elif [[ "$VERSION" == 24.* ]]; then BRANCH="master"
           else echo "Unknown version $VERSION"; exit 1; fi
+
           git clone --depth=1 -b $BRANCH https://git.openwrt.org/openwrt/openwrt.git
-          cd openwrt; git fetch --tags; git checkout v$VERSION
+          cd openwrt
+          git fetch --tags
+          git checkout v$VERSION
 
       - name: Update & install feeds
         run: |
@@ -54,18 +57,25 @@ jobs:
 
       - name: Add DTS for Tinker Board S
         run: |
-          mkdir -p openwrt/target/linux/armvirt/files/arch/arm/boot/dts/
-          cd openwrt/target/linux/armvirt/files/arch/arm/boot/dts/
-          curl -LO https://raw.githubusercontent.com/torvalds/linux/master/arch/arm/boot/dts/rk3288.dtsi
-          curl -LO https://raw.githubusercontent.com/torvalds/linux/master/arch/arm/boot/dts/rk3288-tinker-s.dts
+          mkdir -p openwrt/target/linux/armvirt/files/arch/arm/boot/dts/rockchip
+          cd openwrt/target/linux/armvirt/files/arch/arm/boot/dts/rockchip
+          curl -LO https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/plain/arch/arm/boot/dts/rockchip/rk3288-tinker-s.dts
+          curl -LO https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/plain/arch/arm/boot/dts/rockchip/rk3288-tinker.dtsi
 
       - name: Copy configuration files
         run: |
-          cp configs/config.common openwrt/.config
-          mkdir -p openwrt/output-sdboot
-          cp configs/extlinux.conf openwrt/output-sdboot/
-          cp configs/mkimage.sh openwrt/output-sdboot/
-          chmod +x openwrt/output-sdboot/mkimage.sh
+          cd openwrt
+          rm -rf tmp build_dir .config
+          cp ../configs/config.common .config
+          mkdir -p output-sdboot
+          cp ../configs/extlinux.conf output-sdboot/
+          cp ../configs/mkimage.sh output-sdboot/
+          chmod +x output-sdboot/mkimage.sh
+
+      - name: Finalize .config
+        run: |
+          cd openwrt
+          make defconfig
 
       - name: Build U-Boot
         run: |
@@ -81,7 +91,6 @@ jobs:
       - name: Build OpenWrt
         run: |
           cd openwrt
-          make defconfig
           make download -j$(nproc)
           make -j$(nproc) || make -j1 V=s
 
@@ -90,7 +99,7 @@ jobs:
           cd openwrt/bin/targets/armvirt/32/
           mkdir -p ../../../output-sdboot
           cp zImage ../../../output-sdboot/
-          cp *.dtb ../../../output-sdboot/ || true
+          cp *.dtb ../../../output-sdboot/
           cp root.ext4.gz ../../../output-sdboot/
           cd ../../../output-sdboot
           gunzip -f root.ext4.gz
@@ -108,7 +117,6 @@ jobs:
           name: openwrt-tinkerboard-${{ github.event.inputs.version }}
           path: |
             openwrt/output-sdboot/openwrt.img.gz
-            openwrt/output-sdboot/u-boot*.bin
+            openwrt/output-sdboot/u-boot*
             openwrt/output-sdboot/*.dtb
             openwrt/output-sdboot/zImage
-            

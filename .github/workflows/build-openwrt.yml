@@ -73,6 +73,9 @@ jobs:
         chmod +x openwrt/output-sdboot/mkimage.sh
 
     
+
+
+
 - name: Build U-Boot
   run: |
     git clone --depth=1 https://github.com/TinkerBoard-Linux/rockchip-linux-u-boot.git uboot

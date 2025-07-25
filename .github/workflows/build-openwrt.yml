@@ -75,14 +75,14 @@ jobs:
 
       - name: Build U-Boot
         run: |
-          git clone --depth=1 https://github.com/TinkerBoard-Linux/rockchip-linux-u-boot.git uboot
+          git clone --depth=1 https://source.denx.de/u-boot/u-boot.git uboot
           cd uboot
           export CROSS_COMPILE=arm-linux-gnueabi-
-          make tinker_board_defconfig
+          make tinker_s_defconfig
           make -j$(nproc)
           mkdir -p ../openwrt/output-sdboot
           cp u-boot.bin ../openwrt/output-sdboot/
-          cp u-boot-spl-dtb.bin ../openwrt/output-sdboot/
+          cp spl/u-boot-spl.bin ../openwrt/output-sdboot/
 
       - name: Build OpenWrt
         run: |

@@ -72,11 +72,7 @@ jobs:
         cp configs/mkimage.sh openwrt/output-sdboot/mkimage.sh
         chmod +x openwrt/output-sdboot/mkimage.sh
 
-    
-
-
-
-- name: Build U-Boot
+    - name: Build U-Boot
   run: |
     git clone --depth=1 https://github.com/TinkerBoard-Linux/rockchip-linux-u-boot.git uboot
     cd uboot
@@ -85,8 +81,8 @@ jobs:
     make -j$(nproc)
     cp u-boot.bin ../output-sdboot/u-boot.bin
     cp u-boot-spl-dtb.bin ../output-sdboot/u-boot-spl-dtb.bin
-
-- name: Build OpenWrt
+    
+    - name: Build OpenWrt
       run: |
         cd openwrt
         make defconfig

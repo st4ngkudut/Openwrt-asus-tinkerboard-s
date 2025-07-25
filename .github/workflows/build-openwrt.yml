@@ -59,11 +59,11 @@ jobs:
         ./scripts/feeds update -a
         ./scripts/feeds install -a
 
-    - name: Tambahkan DTS Tinker Board S
+    - name: Tambahkan DTS Tinker Board
       run: |
         mkdir -p openwrt/target/linux/armvirt/files/arch/arm/boot/dts/
-        wget https://raw.githubusercontent.com/TinkerBoard/debian_kernel/develop/arch/arm/boot/dts/rk3288-tinker-s.dts -O openwrt/target/linux/armvirt/files/arch/arm/boot/dts/rk3288-tinker-s.dts
-        wget https://raw.githubusercontent.com/TinkerBoard/debian_kernel/develop/arch/arm/boot/dts/rk3288-tinker.dtsi -O openwrt/target/linux/armvirt/files/arch/arm/boot/dts/rk3288-tinker.dtsi
+        wget https://raw.githubusercontent.com/torvalds/linux/master/arch/arm/boot/dts/rk3288-tinker.dts -O openwrt/target/linux/armvirt/files/arch/arm/boot/dts/rk3288-tinker.dts
+        wget https://raw.githubusercontent.com/torvalds/linux/master/arch/arm/boot/dts/rk3288.dtsi -O openwrt/target/linux/armvirt/files/arch/arm/boot/dts/rk3288.dtsi
 
     - name: Copy configuration files
       run: |
@@ -72,7 +72,18 @@ jobs:
         cp configs/mkimage.sh openwrt/output-sdboot/mkimage.sh
         chmod +x openwrt/output-sdboot/mkimage.sh
 
-    - name: Build OpenWrt
+    
+- name: Build U-Boot
+  run: |
+    git clone --depth=1 https://github.com/TinkerBoard-Linux/rockchip-linux-u-boot.git uboot
+    cd uboot
+    export CROSS_COMPILE=arm-linux-gnueabi-
+    make tinker_board_defconfig
+    make -j$(nproc)
+    cp u-boot.bin ../output-sdboot/u-boot.bin
+    cp u-boot-spl-dtb.bin ../output-sdboot/u-boot-spl-dtb.bin
+
+- name: Build OpenWrt
       run: |
         cd openwrt
         make defconfig
@@ -83,7 +94,7 @@ jobs:
       run: |
         cd openwrt/bin/targets/armvirt/32/
         mkdir -p ../../../output-sdboot
-        cp zImage rk3288-tinker-s.dtb root.ext4.gz ../../../output-sdboot/
+        cp zImage rk3288-tinker.dtb root.ext4.gz ../../../output-sdboot/
         cd ../../../output-sdboot
         gunzip root.ext4.gz
         mv root.ext4 rootfs.ext4

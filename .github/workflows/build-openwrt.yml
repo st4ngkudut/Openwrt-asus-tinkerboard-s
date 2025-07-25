@@ -8,6 +8,7 @@ on:
         required: true
         type: choice
         options:
+          - "22.03.0"
           - "23.05.0"
           - "23.05.1"
           - "23.05.2"
@@ -30,9 +31,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt update
-        sudo apt install -y build-essential clang flex bison g++ gawk \
-          gettext git libncurses-dev libssl-dev python3 unzip zlib1g-dev \
-          subversion libelf-dev ccache wget
+        sudo apt install -y build-essential clang flex bison g++ gawk           gettext git libncurses-dev libssl-dev python3 unzip zlib1g-dev           subversion libelf-dev ccache wget
 
     - name: Clone OpenWrt source ${{ github.event.inputs.version }}
       run: |
@@ -60,11 +59,11 @@ jobs:
         ./scripts/feeds update -a
         ./scripts/feeds install -a
 
-    - name: Tambahkan DTS Tinker Board
+    - name: Tambahkan DTS Tinker Board S
       run: |
         mkdir -p openwrt/target/linux/armvirt/files/arch/arm/boot/dts/
-        wget https://raw.githubusercontent.com/torvalds/linux/master/arch/arm/boot/dts/rk3288-tinker.dts -O openwrt/target/linux/armvirt/files/arch/arm/boot/dts/rk3288-tinker.dts
-        wget https://raw.githubusercontent.com/torvalds/linux/master/arch/arm/boot/dts/rk3288.dtsi -O openwrt/target/linux/armvirt/files/arch/arm/boot/dts/rk3288.dtsi
+        wget https://raw.githubusercontent.com/TinkerBoard/debian_kernel/develop/arch/arm/boot/dts/rk3288-tinker-s.dts -O openwrt/target/linux/armvirt/files/arch/arm/boot/dts/rk3288-tinker-s.dts
+        wget https://raw.githubusercontent.com/TinkerBoard/debian_kernel/develop/arch/arm/boot/dts/rk3288-tinker.dtsi -O openwrt/target/linux/armvirt/files/arch/arm/boot/dts/rk3288-tinker.dtsi
 
     - name: Copy configuration files
       run: |
@@ -84,7 +83,7 @@ jobs:
       run: |
         cd openwrt/bin/targets/armvirt/32/
         mkdir -p ../../../output-sdboot
-        cp zImage rk3288-tinker.dtb root.ext4.gz ../../../output-sdboot/
+        cp zImage rk3288-tinker-s.dtb root.ext4.gz ../../../output-sdboot/
         cd ../../../output-sdboot
         gunzip root.ext4.gz
         mv root.ext4 rootfs.ext4

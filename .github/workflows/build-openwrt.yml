@@ -32,8 +32,10 @@ jobs:
         run: |
           sudo apt update
           sudo apt install -y build-essential clang flex bison g++ gawk \
-            gettext git libncurses-dev libssl-dev python3 unzip zlib1g-dev \
-            subversion libelf-dev ccache wget gcc-arm-linux-gnueabi
+          gettext git libncurses-dev libssl-dev python3 unzip zlib1g-dev \
+          subversion libelf-dev ccache wget gcc-arm-linux-gnueabi \
+          libgnutls28-dev
+
 
       - name: Clone OpenWrt source
         run: |

@@ -26,31 +26,24 @@ jobs:
     name: Build OpenWrt ${{ github.event.inputs.version }}
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Install build dependencies
         run: |
           sudo apt update
-          sudo apt install -y build-essential clang flex bison g++ gawk             gettext git libncurses-dev libssl-dev python3 unzip zlib1g-dev             subversion libelf-dev ccache wget gcc-arm-linux-gnueabi
+          sudo apt install -y build-essential clang flex bison g++ gawk \
+            gettext git libncurses-dev libssl-dev python3 unzip zlib1g-dev \
+            subversion libelf-dev ccache wget gcc-arm-linux-gnueabi
 
-      - name: Clone OpenWrt ${{ github.event.inputs.version }}
+      - name: Clone OpenWrt source
         run: |
           VERSION=${{ github.event.inputs.version }}
-          if [[ "$VERSION" == 22.03.* ]]; then
-            BRANCH="openwrt-22.03"
-          elif [[ "$VERSION" == 23.05.* ]]; then
-            BRANCH="openwrt-23.05"
-          elif [[ "$VERSION" == 24.* ]]; then
-            BRANCH="master"
-          else
-            echo "Versi tidak dikenali: $VERSION"
-            exit 1
-          fi
+          if [[ "$VERSION" == 22.03.* ]]; then BRANCH="openwrt-22.03"
+          elif [[ "$VERSION" == 23.05.* ]]; then BRANCH="openwrt-23.05"
+          elif [[ "$VERSION" == 24.* ]]; then BRANCH="master"
+          else echo "Unknown version $VERSION"; exit 1; fi
           git clone --depth=1 -b $BRANCH https://git.openwrt.org/openwrt/openwrt.git
-          cd openwrt
-          git fetch --tags
-          git checkout v$VERSION
+          cd openwrt; git fetch --tags; git checkout v$VERSION
 
       - name: Update & install feeds
         run: |
@@ -62,15 +55,15 @@ jobs:
         run: |
           mkdir -p openwrt/target/linux/armvirt/files/arch/arm/boot/dts/rockchip
           cd openwrt/target/linux/armvirt/files/arch/arm/boot/dts/rockchip
-          curl -LO https://raw.githubusercontent.com/torvalds/linux/master/arch/arm/boot/dts/rockchip/rk3288-tinker-s.dts
-          curl -LO https://raw.githubusercontent.com/torvalds/linux/master/arch/arm/boot/dts/rockchip/rk3288-tinker.dtsi
+          curl -LO https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/plain/arch/arm/boot/dts/rockchip/rk3288-tinker-s.dts
+          curl -LO https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/plain/arch/arm/boot/dts/rockchip/rk3288-tinker.dtsi
 
       - name: Copy configuration files
         run: |
           cp configs/config.common openwrt/.config
           mkdir -p openwrt/output-sdboot
-          cp configs/extlinux.conf openwrt/output-sdboot/extlinux.conf
-          cp configs/mkimage.sh openwrt/output-sdboot/mkimage.sh
+          cp configs/extlinux.conf openwrt/output-sdboot/
+          cp configs/mkimage.sh openwrt/output-sdboot/
           chmod +x openwrt/output-sdboot/mkimage.sh
 
       - name: Build U-Boot
@@ -78,11 +71,11 @@ jobs:
           git clone --depth=1 https://source.denx.de/u-boot/u-boot.git uboot
           cd uboot
           export CROSS_COMPILE=arm-linux-gnueabi-
-          make tinker_s_defconfig
+          make tinker-rk3288_defconfig
           make -j$(nproc)
           mkdir -p ../openwrt/output-sdboot
-          cp u-boot.bin ../openwrt/output-sdboot/
           cp spl/u-boot-spl.bin ../openwrt/output-sdboot/
+          cp u-boot.bin ../openwrt/output-sdboot/
 
       - name: Build OpenWrt
         run: |
@@ -103,7 +96,7 @@ jobs:
           mv root.ext4 rootfs.ext4
           tar -czf rootfs.tar.gz rootfs.ext4
 
-      - name: Create compressed .img.gz for Balena
+      - name: Create compressed .img.gz
         run: |
           cd openwrt/output-sdboot
           ./mkimage.sh

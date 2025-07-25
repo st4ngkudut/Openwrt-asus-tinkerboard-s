@@ -26,83 +26,94 @@ jobs:
     name: Build OpenWrt ${{ github.event.inputs.version }}
 
     steps:
-    - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Install dependencies
-      run: |
-        sudo apt update
-        sudo apt install -y build-essential clang flex bison g++ gawk           gettext git libncurses-dev libssl-dev python3 unzip zlib1g-dev           subversion libelf-dev ccache wget
+      - name: Install build dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y build-essential clang flex bison g++ gawk             gettext git libncurses-dev libssl-dev python3 unzip zlib1g-dev             subversion libelf-dev ccache wget gcc-arm-linux-gnueabi
 
-    - name: Clone OpenWrt source ${{ github.event.inputs.version }}
-      run: |
-        VERSION=${{ github.event.inputs.version }}
+      - name: Clone OpenWrt ${{ github.event.inputs.version }}
+        run: |
+          VERSION=${{ github.event.inputs.version }}
+          if [[ "$VERSION" == 22.03.* ]]; then
+            BRANCH="openwrt-22.03"
+          elif [[ "$VERSION" == 23.05.* ]]; then
+            BRANCH="openwrt-23.05"
+          elif [[ "$VERSION" == 24.* ]]; then
+            BRANCH="master"
+          else
+            echo "Versi tidak dikenali: $VERSION"
+            exit 1
+          fi
+          git clone --depth=1 -b $BRANCH https://git.openwrt.org/openwrt/openwrt.git
+          cd openwrt
+          git fetch --tags
+          git checkout v$VERSION
 
-        if [[ "$VERSION" == 22.03.* ]]; then
-          BRANCH="openwrt-22.03"
-        elif [[ "$VERSION" == 23.05.* ]]; then
-          BRANCH="openwrt-23.05"
-        elif [[ "$VERSION" == 24.* ]]; then
-          BRANCH="master"
-        else
-          echo "Versi tidak dikenali: $VERSION"
-          exit 1
-        fi
+      - name: Update & install feeds
+        run: |
+          cd openwrt
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
 
-        git clone --depth=1 -b $BRANCH https://git.openwrt.org/openwrt/openwrt.git
-        cd openwrt
-        git fetch --tags
-        git checkout v$VERSION
+      - name: Add DTS for Tinker Board S
+        run: |
+          mkdir -p openwrt/target/linux/armvirt/files/arch/arm/boot/dts/rockchip
+          cd openwrt/target/linux/armvirt/files/arch/arm/boot/dts/rockchip
+          curl -LO https://raw.githubusercontent.com/torvalds/linux/master/arch/arm/boot/dts/rockchip/rk3288-tinker-s.dts
+          curl -LO https://raw.githubusercontent.com/torvalds/linux/master/arch/arm/boot/dts/rockchip/rk3288-tinker.dtsi
 
-    - name: Update & install feeds
-      run: |
-        cd openwrt
-        ./scripts/feeds update -a
-        ./scripts/feeds install -a
+      - name: Copy configuration files
+        run: |
+          cp configs/config.common openwrt/.config
+          mkdir -p openwrt/output-sdboot
+          cp configs/extlinux.conf openwrt/output-sdboot/extlinux.conf
+          cp configs/mkimage.sh openwrt/output-sdboot/mkimage.sh
+          chmod +x openwrt/output-sdboot/mkimage.sh
 
-    - name: Tambahkan DTS Tinker Board
-      run: |
-        mkdir -p openwrt/target/linux/armvirt/files/arch/arm/boot/dts/
-        wget https://raw.githubusercontent.com/torvalds/linux/master/arch/arm/boot/dts/rk3288-tinker.dts -O openwrt/target/linux/armvirt/files/arch/arm/boot/dts/rk3288-tinker.dts
-        wget https://raw.githubusercontent.com/torvalds/linux/master/arch/arm/boot/dts/rk3288.dtsi -O openwrt/target/linux/armvirt/files/arch/arm/boot/dts/rk3288.dtsi
+      - name: Build U-Boot
+        run: |
+          git clone --depth=1 https://github.com/TinkerBoard-Linux/rockchip-linux-u-boot.git uboot
+          cd uboot
+          export CROSS_COMPILE=arm-linux-gnueabi-
+          make tinker_board_defconfig
+          make -j$(nproc)
+          mkdir -p ../openwrt/output-sdboot
+          cp u-boot.bin ../openwrt/output-sdboot/
+          cp u-boot-spl-dtb.bin ../openwrt/output-sdboot/
 
-    - name: Copy configuration files
-      run: |
-        cp configs/config.common openwrt/.config
-        cp configs/extlinux.conf openwrt/output-sdboot/extlinux.conf
-        cp configs/mkimage.sh openwrt/output-sdboot/mkimage.sh
-        chmod +x openwrt/output-sdboot/mkimage.sh
+      - name: Build OpenWrt
+        run: |
+          cd openwrt
+          make defconfig
+          make download -j$(nproc)
+          make -j$(nproc) || make -j1 V=s
 
-    - name: Build U-Boot
-  run: |
-    git clone --depth=1 https://github.com/TinkerBoard-Linux/rockchip-linux-u-boot.git uboot
-    cd uboot
-    export CROSS_COMPILE=arm-linux-gnueabi-
-    make tinker_board_defconfig
-    make -j$(nproc)
-    cp u-boot.bin ../output-sdboot/u-boot.bin
-    cp u-boot-spl-dtb.bin ../output-sdboot/u-boot-spl-dtb.bin
-    
-    - name: Build OpenWrt
-      run: |
-        cd openwrt
-        make defconfig
-        make download -j$(nproc)
-        make -j$(nproc) || make -j1 V=s
+      - name: Prepare SD boot image
+        run: |
+          cd openwrt/bin/targets/armvirt/32/
+          mkdir -p ../../../output-sdboot
+          cp zImage ../../../output-sdboot/
+          cp *.dtb ../../../output-sdboot/
+          cp root.ext4.gz ../../../output-sdboot/
+          cd ../../../output-sdboot
+          gunzip -f root.ext4.gz
+          mv root.ext4 rootfs.ext4
+          tar -czf rootfs.tar.gz rootfs.ext4
 
-    - name: Prepare SD card files
-      run: |
-        cd openwrt/bin/targets/armvirt/32/
-        mkdir -p ../../../output-sdboot
-        cp zImage rk3288-tinker.dtb root.ext4.gz ../../../output-sdboot/
-        cd ../../../output-sdboot
-        gunzip root.ext4.gz
-        mv root.ext4 rootfs.ext4
-        tar -czf rootfs.tar.gz rootfs.ext4
+      - name: Create compressed .img.gz for Balena
+        run: |
+          cd openwrt/output-sdboot
+          ./mkimage.sh
 
-    - name: Upload artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: openwrt-tinkerboard-${{ github.event.inputs.version }}
-        path: |
-          openwrt/bin/targets/armvirt/32/
-          openwrt/output-sdboot/
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: openwrt-tinkerboard-${{ github.event.inputs.version }}
+          path: |
+            openwrt/output-sdboot/openwrt.img.gz
+            openwrt/output-sdboot/u-boot*
+            openwrt/output-sdboot/*.dtb
+            openwrt/output-sdboot/zImage

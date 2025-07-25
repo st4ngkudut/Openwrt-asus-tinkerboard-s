@@ -1,40 +1,33 @@
 #!/bin/bash
 set -e
 
-if [[ -z "$1" ]]; then
-  echo "Usage: $0 /dev/sdX"
-  exit 1
-fi
+OUTPUT_IMG="openwrt.img"
+BOOT_SIZE=64M
+ROOTFS=rootfs.ext4
 
-DISK=$1
+dd if=/dev/zero of=$OUTPUT_IMG bs=1M count=512
 
-echo "[*] Partitioning $DISK..."
-sudo parted -s "$DISK" mklabel msdos
-sudo parted -s "$DISK" mkpart primary fat32 1MiB 100MiB
-sudo parted -s "$DISK" mkpart primary ext4 100MiB 100%
+parted $OUTPUT_IMG --script mklabel msdos
+parted $OUTPUT_IMG --script mkpart primary ext2 1MiB 65MiB
+parted $OUTPUT_IMG --script mkpart primary ext4 65MiB 100%
 
-BOOT="${DISK}1"
-ROOT="${DISK}2"
+LOOPDEV=$(losetup --show -fP $OUTPUT_IMG)
+partprobe $LOOPDEV
 
-sudo mkfs.vfat "$BOOT"
-sudo mkfs.ext4 "$ROOT"
+mkfs.vfat ${LOOPDEV}p1
+mkfs.ext4 ${LOOPDEV}p2
 
-MNT_BOOT=$(mktemp -d)
-MNT_ROOT=$(mktemp -d)
+mkdir -p mnt/boot mnt/root
+mount ${LOOPDEV}p1 mnt/boot
+mount ${LOOPDEV}p2 mnt/root
 
-sudo mount "$BOOT" "$MNT_BOOT"
-sudo mount "$ROOT" "$MNT_ROOT"
-
-echo "[*] Copying boot files..."
-sudo cp zImage rk3288-tinker.dtb "$MNT_BOOT"
-sudo mkdir -p "$MNT_BOOT/extlinux"
-sudo cp extlinux.conf "$MNT_BOOT/extlinux/"
-
-echo "[*] Extracting rootfs..."
-tar -xzf rootfs.tar.gz -C "$MNT_ROOT"
+cp zImage *.dtb extlinux.conf mnt/boot/
+dd if=$ROOTFS of=${LOOPDEV}p2 bs=4M conv=fsync
 
 sync
-sudo umount "$MNT_BOOT" "$MNT_ROOT"
-rmdir "$MNT_BOOT" "$MNT_ROOT"
+umount mnt/boot mnt/root
+losetup -d $LOOPDEV
+rm -rf mnt
 
-echo "[✓] SD Card ready to flash into Tinker Board S."
+gzip -f $OUTPUT_IMG
+echo "✅ Image created and compressed: $OUTPUT_IMG.gz"

@@ -37,4 +37,4 @@ sync
 sudo umount "$MNT_BOOT" "$MNT_ROOT"
 rmdir "$MNT_BOOT" "$MNT_ROOT"
 
-echo "[✓] SD Card ready. Now you can boot Tinker Board S."
+echo "[✓] SD Card ready to flash into Tinker Board S."

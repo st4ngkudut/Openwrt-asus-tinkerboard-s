@@ -1,5 +1,8 @@
 name: Build OpenWrt for Tinker Board S
 
+permissions:
+  contents: write
+
 on:
   workflow_dispatch:
     inputs:
@@ -24,6 +27,9 @@ jobs:
   build:
     runs-on: ubuntu-22.04
     name: Build OpenWrt ${{ github.event.inputs.version }}
+    env:
+      OUTPUT_DIR: openwrt/bin/targets/armsr/armv7
+      SD_BOOT_DIR: openwrt/output-sdboot
 
     steps:
       - uses: actions/checkout@v4
@@ -32,9 +38,9 @@ jobs:
         run: |
           sudo apt update
           sudo apt install -y build-essential clang flex bison g++ gawk \
-            gettext git libncurses-dev libssl-dev python3 unzip zlib1g-dev \
-            subversion libelf-dev ccache wget gcc-arm-linux-gnueabi \
-            libgnutls28-dev
+          gettext git libncurses-dev libssl-dev python3 unzip zlib1g-dev \
+          subversion libelf-dev ccache wget gcc-arm-linux-gnueabi \
+          libgnutls28-dev
 
       - name: Clone OpenWrt source
         run: |
@@ -43,11 +49,8 @@ jobs:
           elif [[ "$VERSION" == 23.05.* ]]; then BRANCH="openwrt-23.05"
           elif [[ "$VERSION" == 24.* ]]; then BRANCH="master"
           else echo "Unknown version $VERSION"; exit 1; fi
-
           git clone --depth=1 -b $BRANCH https://git.openwrt.org/openwrt/openwrt.git
-          cd openwrt
-          git fetch --tags
-          git checkout v$VERSION
+          cd openwrt; git fetch --tags; git checkout v$VERSION
 
       - name: Update & install feeds
         run: |
@@ -57,31 +60,18 @@ jobs:
 
       - name: Add DTS for Tinker Board S
         run: |
-          mkdir -p openwrt/target/linux/armvirt/files/arch/arm/boot/dts/rockchip
-          cd openwrt/target/linux/armvirt/files/arch/arm/boot/dts/rockchip
+          mkdir -p openwrt/target/linux/armsr/files/arch/arm/boot/dts/rockchip
+          cd openwrt/target/linux/armsr/files/arch/arm/boot/dts/rockchip
           curl -LO https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/plain/arch/arm/boot/dts/rockchip/rk3288-tinker-s.dts
           curl -LO https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/plain/arch/arm/boot/dts/rockchip/rk3288-tinker.dtsi
 
       - name: Copy configuration files
         run: |
-          cd openwrt
-          rm -rf tmp build_dir .config
-          cp ../configs/config.common .config
-          mkdir -p output-sdboot
-          cp ../configs/extlinux.conf output-sdboot/
-          cp ../configs/mkimage.sh output-sdboot/
-          chmod +x output-sdboot/mkimage.sh
-          sed -i '/CONFIG_TARGET_/d' .config
-          echo "CONFIG_TARGET_armvirt=y" >> .config
-          echo "CONFIG_TARGET_armvirt_32=y" >> .config
-          echo "CONFIG_TARGET_armvirt_32_Generic=y" >> .config
-          make defconfig
-
-
-      - name: Finalize .config
-        run: |
-          cd openwrt
-          make defconfig
+          cp configs/config.common openwrt/.config
+          mkdir -p $SD_BOOT_DIR
+          cp configs/extlinux.conf $SD_BOOT_DIR/
+          cp configs/mkimage.sh $SD_BOOT_DIR/
+          chmod +x $SD_BOOT_DIR/mkimage.sh
 
       - name: Build U-Boot
         run: |
@@ -90,39 +80,55 @@ jobs:
           export CROSS_COMPILE=arm-linux-gnueabi-
           make tinker-rk3288_defconfig
           make -j$(nproc)
-          mkdir -p ../openwrt/output-sdboot
-          cp spl/u-boot-spl.bin ../openwrt/output-sdboot/
-          cp u-boot.bin ../openwrt/output-sdboot/
+          cp spl/u-boot-spl.bin ../$SD_BOOT_DIR/
+          cp u-boot.bin ../$SD_BOOT_DIR/
 
       - name: Build OpenWrt
         run: |
           cd openwrt
+          make defconfig
           make download -j$(nproc)
           make -j$(nproc) || make -j1 V=s
 
       - name: Prepare SD boot image
         run: |
-          cd openwrt/bin/targets/armvirt/32/
-          mkdir -p ../../../output-sdboot
-          cp zImage ../../../output-sdboot/
-          cp *.dtb ../../../output-sdboot/
-          cp root.ext4.gz ../../../output-sdboot/
-          cd ../../../output-sdboot
+          cd $OUTPUT_DIR
+          cp zImage ../../../../../$SD_BOOT_DIR/
+          cp *.dtb ../../../../../$SD_BOOT_DIR/
+          cp root.ext4.gz ../../../../../$SD_BOOT_DIR/
+          cd ../../../../../$SD_BOOT_DIR
           gunzip -f root.ext4.gz
           mv root.ext4 rootfs.ext4
           tar -czf rootfs.tar.gz rootfs.ext4
 
       - name: Create compressed .img.gz
         run: |
-          cd openwrt/output-sdboot
+          cd $SD_BOOT_DIR
           ./mkimage.sh
 
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        if: github.event_name == 'workflow_dispatch'
         with:
-          name: openwrt-tinkerboard-${{ github.event.inputs.version }}
-          path: |
-            openwrt/output-sdboot/openwrt.img.gz
-            openwrt/output-sdboot/u-boot*
-            openwrt/output-sdboot/*.dtb
-            openwrt/output-sdboot/zImage
+          tag_name: "v${{ github.event.inputs.version }}"
+          name: "OpenWrt Tinker Board S - ${{ github.event.inputs.version }}"
+          body: |
+            This release contains OpenWrt for Asus Tinker Board S (RK3288), built with version ${{ github.event.inputs.version }}.
+
+            ✅ Flashable .img.gz for SD card  
+            ✅ Includes full kmod and LuCI
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload release files
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: "v${{ github.event.inputs.version }}"
+          files: |
+            ${{ env.SD_BOOT_DIR }}/openwrt.img.gz
+            ${{ env.SD_BOOT_DIR }}/zImage
+            ${{ env.SD_BOOT_DIR }}/*.dtb
+            ${{ env.SD_BOOT_DIR }}/u-boot*
+            ${{ env.SD_BOOT_DIR }}/rootfs.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -67,11 +67,23 @@ jobs:
 
       - name: Copy configuration files
         run: |
-          cp configs/config.common openwrt/.config
-          mkdir -p $SD_BOOT_DIR
-          cp configs/extlinux.conf $SD_BOOT_DIR/
-          cp configs/mkimage.sh $SD_BOOT_DIR/
-          chmod +x $SD_BOOT_DIR/mkimage.sh
+          cd openwrt
+          rm -rf tmp build_dir .config
+          cp ../configs/config.common .config
+          mkdir -p output-sdboot
+          cp ../configs/extlinux.conf output-sdboot/
+          cp ../configs/mkimage.sh output-sdboot/
+          chmod +x output-sdboot/mkimage.sh
+          sed -i '/CONFIG_TARGET_/d' .config
+          echo "CONFIG_TARGET_armvirt=y" >> .config
+          echo "CONFIG_TARGET_armvirt_32=y" >> .config
+          echo "CONFIG_TARGET_armvirt_32_Generic=y" >> .config
+          make defconfig
+
+      - name: Finalize .config
+        run: |
+          cd openwrt
+          make defconfig
 
       - name: Build U-Boot
         run: |

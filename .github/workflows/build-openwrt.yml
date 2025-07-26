@@ -102,21 +102,13 @@ jobs:
           make download -j$(nproc)
           make -j$(nproc) || make -j1 V=s
 
-      - name: Prepare SD boot image
-        run: |
-          cd $OUTPUT_DIR
-          cp zImage ../../../../../$SD_BOOT_DIR/
-          cp *.dtb ../../../../../$SD_BOOT_DIR/
-          cp root.ext4.gz ../../../../../$SD_BOOT_DIR/
-          cd ../../../../../$SD_BOOT_DIR
-          gunzip -f root.ext4.gz
-          mv root.ext4 rootfs.ext4
-          tar -czf rootfs.tar.gz rootfs.ext4
-
-      - name: Create compressed .img.gz
-        run: |
-          cd $SD_BOOT_DIR
-          ./mkimage.sh
+      - name: Upload build artifacts (to GitHub Actions)
+        uses: actions/upload-artifact@v4
+        with:
+          name: openwrt-tinkerboard-build-${{ github.event.inputs.version }}
+          path: |
+            ${{ env.OUTPUT_DIR }}/**
+            ${{ env.SD_BOOT_DIR }}/**
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
@@ -127,8 +119,9 @@ jobs:
           body: |
             This release contains OpenWrt for Asus Tinker Board S (RK3288), built with version ${{ github.event.inputs.version }}.
 
-            ✅ Flashable .img.gz for SD card  
-            ✅ Includes full kmod and LuCI
+            ✅ Flashable images  
+            ✅ Includes full kmod and LuCI  
+            ✅ Built using target: armsr/armv7
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -137,10 +130,7 @@ jobs:
         with:
           tag_name: "v${{ github.event.inputs.version }}"
           files: |
-            ${{ env.SD_BOOT_DIR }}/openwrt.img.gz
-            ${{ env.SD_BOOT_DIR }}/zImage
-            ${{ env.SD_BOOT_DIR }}/*.dtb
-            ${{ env.SD_BOOT_DIR }}/u-boot*
-            ${{ env.SD_BOOT_DIR }}/rootfs.tar.gz
+            ${{ env.OUTPUT_DIR }}/**
+            ${{ env.SD_BOOT_DIR }}/**
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

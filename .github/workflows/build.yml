@@ -1,0 +1,73 @@
+name: Build OpenWrt for Tinker Board S
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Pilih versi OpenWrt"
+        required: true
+        type: choice
+        options:
+          - "22.03.0"
+          - "23.05.0"
+          - "23.05.1"
+          - "23.05.2"
+          - "23.05.3"
+          - "23.05.4"
+          - "23.05.5"
+          - "23.05.6"
+          - "23.05.7"
+          - "24.10.1"
+          - "24.10.2"
+
+jobs:
+  build:
+    name: Build OpenWrt ${{ github.event.inputs.version }}
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y build-essential clang flex bison g++ gawk \
+          gettext git libncurses-dev libssl-dev python3 unzip zlib1g-dev \
+          subversion libelf-dev ccache wget gcc-arm-linux-gnueabi \
+          libgnutls28-dev
+
+      - name: Clone OpenWrt source
+        run: |
+          VERSION=${{ github.event.inputs.version }}
+          if [[ "$VERSION" == 22.03.* ]]; then BRANCH="openwrt-22.03"
+          elif [[ "$VERSION" == 23.05.* ]]; then BRANCH="openwrt-23.05"
+          elif [[ "$VERSION" == 24.* ]]; then BRANCH="master"
+          else echo "Unknown version $VERSION"; exit 1; fi
+          git clone --depth=1 -b $BRANCH https://git.openwrt.org/openwrt/openwrt.git
+          cd openwrt
+          git fetch --tags
+          git checkout v$VERSION
+
+      - name: Update & install feeds
+        run: |
+          cd openwrt
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+
+      - name: Copy custom configuration
+        run: |
+          cp configs/config.common openwrt/.config
+
+      - name: Build OpenWrt
+        run: |
+          cd openwrt
+          make defconfig
+          make download -j$(nproc)
+          make -j$(nproc) || make -j1 V=s
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: openwrt-tinkerboard-${{ github.event.inputs.version }}
+          path: openwrt/bin/targets/armsr/armv7/

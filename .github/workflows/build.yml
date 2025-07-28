@@ -1,73 +1,86 @@
+
 name: Build OpenWrt for Tinker Board S
 
 on:
   workflow_dispatch:
     inputs:
-      version:
+      openwrt_version:
         description: "Pilih versi OpenWrt"
         required: true
+        default: "23.05.2"
         type: choice
         options:
-          - "22.03.0"
+          - "22.03.5"
           - "23.05.0"
-          - "23.05.1"
           - "23.05.2"
-          - "23.05.3"
-          - "23.05.4"
-          - "23.05.5"
-          - "23.05.6"
-          - "23.05.7"
-          - "24.10.1"
-          - "24.10.2"
+          - "snapshot"
+      custom_packages:
+        description: "Tambahkan paket tambahan (dipisah spasi, contoh: luci nano)"
+        required: false
+        default: ""
+        type: string
 
 jobs:
   build:
-    name: Build OpenWrt ${{ github.event.inputs.version }}
-    runs-on: ubuntu-22.04
-
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - name: Checkout Repo
+        uses: actions/checkout@v3
 
-      - name: Install dependencies
+      - name: Clone OpenWrt
         run: |
-          sudo apt update
-          sudo apt install -y build-essential clang flex bison g++ gawk \
-          gettext git libncurses-dev libssl-dev python3 unzip zlib1g-dev \
-          subversion libelf-dev ccache wget gcc-arm-linux-gnueabi \
-          libgnutls28-dev
-
-      - name: Clone OpenWrt source
-        run: |
-          VERSION=${{ github.event.inputs.version }}
-          if [[ "$VERSION" == 22.03.* ]]; then BRANCH="openwrt-22.03"
-          elif [[ "$VERSION" == 23.05.* ]]; then BRANCH="openwrt-23.05"
-          elif [[ "$VERSION" == 24.* ]]; then BRANCH="master"
-          else echo "Unknown version $VERSION"; exit 1; fi
-          git clone --depth=1 -b $BRANCH https://git.openwrt.org/openwrt/openwrt.git
+          git clone https://github.com/openwrt/openwrt.git
           cd openwrt
-          git fetch --tags
-          git checkout v$VERSION
+          if [[ "${{ github.event.inputs.openwrt_version }}" != "snapshot" ]]; then
+            git checkout v${{ github.event.inputs.openwrt_version }}
+          fi
 
-      - name: Update & install feeds
+      - name: Install Feeds
         run: |
           cd openwrt
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
-      - name: Copy custom configuration
+      - name: Tambah DTS & Makefile
         run: |
-          cp configs/config.common openwrt/.config
+          cd openwrt
+          mkdir -p target/linux/armsr/dts
+          cp ../openwrt-device/dts/rk3288-tinker-s.dts target/linux/armsr/dts/
+          echo "" >> target/linux/armsr/image/Makefile
+          cat ../openwrt-device/makefile-snippet.mk >> target/linux/armsr/image/Makefile
+
+      - name: Config Build
+        run: |
+          cd openwrt
+          cat <<EOF > .config
+CONFIG_TARGET_armsr=y
+CONFIG_TARGET_armsr_armv7=y
+CONFIG_TARGET_armsr_armv7_DEVICE_asus_tinker_board_s=y
+CONFIG_ALL_KMODS=y
+CONFIG_DEVEL=y
+CONFIG_BUILD_LOG=y
+CONFIG_PACKAGE_kmod-usb-core=y
+CONFIG_PACKAGE_kmod-usb2=y
+CONFIG_PACKAGE_kmod-usb3=y
+CONFIG_PACKAGE_kmod-fs-ext4=y
+CONFIG_PACKAGE_block-mount=y
+EOF
+
+          if [[ ! -z "${{ github.event.inputs.custom_packages }}" ]]; then
+            for pkg in ${{ github.event.inputs.custom_packages }}; do
+              echo "CONFIG_PACKAGE_$pkg=y" >> .config
+            done
+          fi
+
+          make defconfig
 
       - name: Build OpenWrt
         run: |
           cd openwrt
-          make defconfig
-          make download -j$(nproc)
-          make -j$(nproc) || make -j1 V=s
+          make -j$(nproc)
 
-      - name: Upload build artifacts
+      - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: openwrt-tinkerboard-${{ github.event.inputs.version }}
+          name: openwrt-tinkerboard
           path: openwrt/bin/targets/armsr/armv7/

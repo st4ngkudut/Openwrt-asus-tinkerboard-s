@@ -12,7 +12,8 @@ on:
         options:
           - "22.03.5"
           - "23.05.0"
-          - "23.05.2"
+          - "24.10.1"
+          - "24.10.2"
           - "snapshot"
       custom_packages:
         description: "Tambahkan paket tambahan (dipisah spasi, contoh: luci nano)"
@@ -53,18 +54,18 @@ jobs:
         run: |
           cd openwrt
           cat <<EOF > .config
-CONFIG_TARGET_armsr=y
-CONFIG_TARGET_armsr_armv7=y
-CONFIG_TARGET_armsr_armv7_DEVICE_asus_tinker_board_s=y
-CONFIG_ALL_KMODS=y
-CONFIG_DEVEL=y
-CONFIG_BUILD_LOG=y
-CONFIG_PACKAGE_kmod-usb-core=y
-CONFIG_PACKAGE_kmod-usb2=y
-CONFIG_PACKAGE_kmod-usb3=y
-CONFIG_PACKAGE_kmod-fs-ext4=y
-CONFIG_PACKAGE_block-mount=y
-EOF
+          CONFIG_TARGET_armsr=y
+          CONFIG_TARGET_armsr_armv7=y
+          CONFIG_TARGET_armsr_armv7_DEVICE_asus_tinker_board_s=y
+          CONFIG_ALL_KMODS=y
+          CONFIG_DEVEL=y
+          CONFIG_BUILD_LOG=y
+          CONFIG_PACKAGE_kmod-usb-core=y
+          CONFIG_PACKAGE_kmod-usb2=y
+          CONFIG_PACKAGE_kmod-usb3=y
+          CONFIG_PACKAGE_kmod-fs-ext4=y
+          CONFIG_PACKAGE_block-mount=y
+          EOF
 
           if [[ ! -z "${{ github.event.inputs.custom_packages }}" ]]; then
             for pkg in ${{ github.event.inputs.custom_packages }}; do

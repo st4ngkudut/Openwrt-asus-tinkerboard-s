@@ -4,12 +4,12 @@
 #include "rk3288-miniarm.dtsi"
 
 / {
-    model = "ASUS Tinker Board S";
-    compatible = "asus,tinker-board-s", "rockchip,rk3288";
+    model = "Rockchip RK3288 Tinker Board";
+    compatible = "rockchip,rk3288-tinker", "rockchip,rk3288";
 
     memory@0 {
         device_type = "memory";
-        reg = <0x0 0x80000000>; // 2GB RAM
+        reg = <0x0 0x80000000>;
     };
 
     aliases {
